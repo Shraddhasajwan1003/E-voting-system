@@ -314,9 +314,9 @@ export default function Login() {
 
       <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
         {t('no_account')}{' '}
-        <a href="/register" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold transition-colors">
+        <Link to="/register" className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-bold transition-colors">
           {t('register_form6')}
-        </a>
+        </Link>
       </div>
     </motion.div>
   );
