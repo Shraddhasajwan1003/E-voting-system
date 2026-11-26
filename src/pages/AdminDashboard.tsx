@@ -2,728 +2,673 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'motion/react';
-import { Users, Vote, Percent, FileText, Download, ShieldCheck, AlertTriangle, MapPin, Edit, CheckCircle, XCircle, Edit2, Settings } from 'lucide-react';
+import {
+  Users,
+  Vote,
+  FileText,
+  Download,
+  ShieldCheck,
+  AlertTriangle,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  Edit2,
+  Trash2,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Bot,
+  Calendar,
+  PhoneCall,
+  Bell,
+  Lock,
+  Unlock,
+  HeartHandshake
+} from 'lucide-react';
 import { API_BASE_URL } from '../api';
-
-interface Stats {
-  totalVoters: number;
-  totalVotes: number;
-  turnoutPercentage: number;
-  pendingComplaints: number;
-}
-
-interface Result {
-  id: number;
-  name: string;
-  party_name: string;
-  party_symbol: string;
-  votes: number;
-}
-
-interface Voter {
-  id: number;
-  name: string;
-  email: string;
-  mobile: string;
-  address: string;
-  city: string;
-  aadhaar_last4: string;
-  epic_number: string;
-  constituency: string;
-  polling_station: string;
-  has_voted: number;
-}
-
-interface Complaint {
-  id: number;
-  subject: string;
-  description: string;
-  status: string;
-  created_at: string;
-  user_name: string;
-  user_email: string;
-}
-
-interface Candidate {
-  id: number;
-  name: string;
-  party_name: string;
-  party_symbol: string;
-  constituency: string;
-}
 
 export default function AdminDashboard() {
   const { user, token } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  
-  const [activeTab, setActiveTab] = useState<'overview' | 'voters' | 'candidates' | 'complaints'>('overview');
-  
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [results, setResults] = useState<Result[]>([]);
-  const [voters, setVoters] = useState<Voter[]>([]);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  
+
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'elections' | 'candidates' | 'voters' | 'sir_queue' | 'complaints' | 'announcements_audit'
+  >('overview');
+
+  const [stats, setStats] = useState<any | null>(null);
+  const [results, setResults] = useState<any[]>([]);
+  const [elections, setElections] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [voters, setVoters] = useState<any[]>([]);
+  const [sirRequests, setSirRequests] = useState<any[]>([]);
+  const [complaints, setComplaints] = useState<any[]>([]);
+  const [bloOfficers, setBloOfficers] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  // Edit Voter State
-  const [editingVoter, setEditingVoter] = useState<Voter | null>(null);
-  const [editConstituency, setEditConstituency] = useState('');
-  const [editPollingStation, setEditPollingStation] = useState('');
+  const [aiBriefing, setAiBriefing] = useState<string | null>(null);
+  const [generatingBriefing, setGeneratingBriefing] = useState(false);
 
-  // Timeline State
-  const [timelineStart, setTimelineStart] = useState('');
-  const [timelineEnd, setTimelineEnd] = useState('');
-  const [timelineStatus, setTimelineStatus] = useState('');
+  // Candidate Form Modal
+  const [showCandidateModal, setShowCandidateModal] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<any | null>(null);
+  const [candName, setCandName] = useState('');
+  const [candParty, setCandParty] = useState('');
+  const [candSymbol, setCandSymbol] = useState('');
+  const [candConstituency, setCandConstituency] = useState('New Delhi Central');
+  const [candAge, setCandAge] = useState('');
+  const [candEducation, setCandEducation] = useState('');
+  const [candAssets, setCandAssets] = useState('');
+  const [candCases, setCandCases] = useState('0');
+  const [candBio, setCandBio] = useState('');
+  const [candManifesto, setCandManifesto] = useState('');
 
-  // Edit Profile State
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [editName, setEditName] = useState(user?.name || '');
-  const [editMobile, setEditMobile] = useState(user?.mobile || '');
-  const [profileStatus, setProfileStatus] = useState('');
+  // Complaint Reply State
+  const [replyingComplaintId, setReplyingComplaintId] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState('');
 
-  // Add Candidate State
-  const [newCandidate, setNewCandidate] = useState({
-    name: '',
-    party_name: '',
-    party_symbol: '',
-    constituency: '',
-    city: '',
-    state: ''
-  });
-  const [candidateStatus, setCandidateStatus] = useState('');
-  const [states, setStates] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [constituenciesList, setConstituenciesList] = useState<string[]>([]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [statsRes, resultsRes, votersRes, complaintsRes, candidatesRes, timelineRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/admin/stats`, { headers }),
-        fetch(`${API_BASE_URL}/api/admin/results`, { headers }),
-        fetch(`${API_BASE_URL}/api/admin/voters`, { headers }),
-        fetch(`${API_BASE_URL}/api/admin/complaints`, { headers }),
-        fetch(`${API_BASE_URL}/api/admin/candidates`, { headers }),
-        fetch(`${API_BASE_URL}/api/settings/timeline`, { headers })
-      ]);
-
-      if (!statsRes.ok) throw new Error('Failed to fetch stats');
-      
-      setStats(await statsRes.json());
-      setResults(await resultsRes.json());
-      setVoters(await votersRes.json());
-      setComplaints(await complaintsRes.json());
-      setCandidates(await candidatesRes.json());
-      
-      const timelineData = await timelineRes.json();
-      if (timelineData.start) setTimelineStart(timelineData.start.slice(0, 16));
-      if (timelineData.end) setTimelineEnd(timelineData.end.slice(0, 16));
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateTimeline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/settings/timeline`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ 
-          start: new Date(timelineStart).toISOString(), 
-          end: new Date(timelineEnd).toISOString() 
-        })
-      });
-      if (res.ok) {
-        setTimelineStatus('Timeline updated successfully!');
-        setTimeout(() => setTimelineStatus(''), 3000);
-      } else {
-        setTimelineStatus('Failed to update timeline.');
-      }
-    } catch (err) {
-      setTimelineStatus('An error occurred.');
-    }
-  };
-
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ name: editName, mobile: editMobile })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setProfileStatus('Profile updated successfully!');
-        // We don't have login in useAuth from AdminDashboard currently, but we can reload
-        setTimeout(() => {
-          setShowEditProfile(false);
-          setProfileStatus('');
-          window.location.reload();
-        }, 1500);
-      } else {
-        setProfileStatus(data.error || 'Failed to update profile.');
-      }
-    } catch (err) {
-      setProfileStatus('An error occurred.');
-    }
-  };
+  // Announcement Form
+  const [annTitle, setAnnTitle] = useState('');
+  const [annContent, setAnnContent] = useState('');
+  const [annCategory, setAnnCategory] = useState('NOTICE');
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
       return;
     }
-    fetchData();
+    fetchAdminData();
+  }, [user, navigate, token]);
 
-    fetch(`${API_BASE_URL}/api/auth/states`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setStates(data);
-        } else {
-          console.error('States data is not an array:', data);
-          setStates([]);
-        }
-      })
-      .catch(err => console.error('Error fetching states:', err));
-  }, [user, token, navigate]);
-
-  useEffect(() => {
-    if (newCandidate.state) {
-      fetch(`${API_BASE_URL}/api/auth/cities?state=${newCandidate.state}`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            setCities(data);
-          } else {
-            console.error('Cities data is not an array:', data);
-            setCities([]);
-          }
-        })
-        .catch(err => console.error('Error fetching cities:', err));
-    } else {
-      setCities([]);
-    }
-  }, [newCandidate.state]);
-
-  useEffect(() => {
-    if (newCandidate.city) {
-      fetch(`${API_BASE_URL}/api/auth/constituencies?city=${newCandidate.city}&state=${newCandidate.state}`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            setConstituenciesList(data);
-            if (data.length > 0 && !newCandidate.constituency) {
-              setNewCandidate(prev => ({ ...prev, constituency: data[0] }));
-            }
-          } else {
-            console.error('Constituencies data is not an array:', data);
-            setConstituenciesList([]);
-          }
-        })
-        .catch(err => console.error('Error fetching constituencies:', err));
-    } else {
-      setConstituenciesList([]);
-    }
-  }, [newCandidate.city, newCandidate.state]);
-
-  const handleUpdateVoter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingVoter) return;
-    
+  const fetchAdminData = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/voters/${editingVoter.id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ constituency: editConstituency, polling_station: editPollingStation })
-      });
-      
-      if (!res.ok) throw new Error('Failed to update voter');
-      
-      setEditingVoter(null);
-      fetchData();
-    } catch (err: any) {
-      setError(err.message);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [
+        statsRes,
+        resultsRes,
+        electionsRes,
+        candidatesRes,
+        votersRes,
+        sirRes,
+        complaintsRes,
+        blosRes,
+        annRes,
+        auditRes
+      ] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/admin/stats`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/results`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/elections`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/candidates`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/voters`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/sir-requests`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/complaints`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/blo-officers`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/announcements`, { headers }),
+        fetch(`${API_BASE_URL}/api/admin/audit-logs`, { headers })
+      ]);
+
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (resultsRes.ok) setResults(await resultsRes.json());
+      if (electionsRes.ok) setElections(await electionsRes.json());
+      if (candidatesRes.ok) setCandidates(await candidatesRes.json());
+      if (votersRes.ok) setVoters(await votersRes.json());
+      if (sirRes.ok) setSirRequests(await sirRes.json());
+      if (complaintsRes.ok) setComplaints(await complaintsRes.json());
+      if (blosRes.ok) setBloOfficers(await blosRes.json());
+      if (annRes.ok) setAnnouncements(await annRes.json());
+      if (auditRes.ok) setAuditLogs(await auditRes.json());
+    } catch (e) {
+      console.error('Failed to load admin data:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdateComplaint = async (id: number, status: string) => {
+  const generateAiBriefing = async () => {
+    setGeneratingBriefing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/complaints/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status })
-      });
-      
-      if (!res.ok) throw new Error('Failed to update complaint');
-      fetchData();
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleAddCandidate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/candidates`, {
+      const res = await fetch(`${API_BASE_URL}/api/ai/admin-briefing`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify(newCandidate)
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
       if (res.ok) {
-        setCandidateStatus('Candidate added successfully!');
-        setNewCandidate({ name: '', party_name: '', party_symbol: '', constituency: '', city: '', state: '' });
-        fetchData();
-        setTimeout(() => setCandidateStatus(''), 3000);
-      } else {
         const data = await res.json();
-        setCandidateStatus(data.error || 'Failed to add candidate.');
+        setAiBriefing(data.briefing);
       }
-    } catch (err) {
-      setCandidateStatus('An error occurred.');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGeneratingBriefing(false);
     }
+  };
+
+  const handleTogglePublishResults = async (electionId: number, currentStatus: boolean) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/elections/${electionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ results_published: !currentStatus })
+      });
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveCandidate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const manifestoList = candManifesto
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const payload = {
+      name: candName,
+      party_name: candParty,
+      party_symbol: candSymbol,
+      constituency: candConstituency,
+      age: candAge ? parseInt(candAge) : null,
+      education: candEducation,
+      assets_declared: candAssets,
+      criminal_cases: parseInt(candCases) || 0,
+      bio: candBio,
+      manifesto_json: manifestoList
+    };
+
+    try {
+      if (editingCandidate) {
+        await fetch(`${API_BASE_URL}/api/admin/candidates/${editingCandidate.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetch(`${API_BASE_URL}/api/admin/candidates`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+      setShowCandidateModal(false);
+      resetCandidateForm();
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const resetCandidateForm = () => {
+    setEditingCandidate(null);
+    setCandName('');
+    setCandParty('');
+    setCandSymbol('');
+    setCandConstituency('New Delhi Central');
+    setCandAge('');
+    setCandEducation('');
+    setCandAssets('');
+    setCandCases('0');
+    setCandBio('');
+    setCandManifesto('');
   };
 
   const handleDeleteCandidate = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this candidate?')) return;
-    
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/candidates/${id}`, {
+      await fetch(`${API_BASE_URL}/api/admin/candidates/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (res.ok) {
-        fetchData();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to delete candidate.');
-      }
-    } catch (err) {
-      setError('An error occurred.');
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  if (loading && !stats) return (
-    <div className="flex justify-center items-center h-64">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-    </div>
-  );
+  const handleReviewSir = async (id: number, status: 'APPROVED' | 'REJECTED') => {
+    const remarks = window.prompt(`Enter administrative remarks for ${status}:`, 'Verified by Returning Officer');
+    if (remarks === null) return;
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/sir-requests/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status, admin_remarks: remarks })
+      });
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+  const handleReplyComplaint = async (id: number) => {
+    if (!replyText.trim()) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/complaints/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'resolved', admin_reply: replyText.trim() })
+      });
+      setReplyingComplaintId(null);
+      setReplyText('');
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annTitle.trim() || !annContent.trim()) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/admin/announcements`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: annTitle,
+          content: annContent,
+          category: annCategory,
+          is_pinned: 1
+        })
+      });
+      setAnnTitle('');
+      setAnnContent('');
+      fetchAdminData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleExport = (type: 'voters' | 'results' | 'sir' | 'audit') => {
+    window.open(`${API_BASE_URL}/api/admin/export/${type}?token=${token}`, '_blank');
   };
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8">
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-6 transition-colors duration-200 gap-4">
+    <div className="max-w-7xl mx-auto space-y-6 py-4">
+      {/* Admin Command Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-700">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white flex items-center tracking-tight">
-            <ShieldCheck className="w-8 h-8 mr-3 text-orange-600 dark:text-orange-400" />
-            Admin Control Center
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-full text-xs font-bold mb-1">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Authorized Returning Officer / ECI Command Portal</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            Election Commission Command Center
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-2 font-medium">Manage elections, voters, and view real-time statistics.</p>
         </div>
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <button 
-            onClick={() => setShowEditProfile(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-semibold shadow-sm"
+
+        {/* Export Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => handleExport('voters')}
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center space-x-1"
           >
-            <Edit2 className="w-4 h-4" />
-            <span>Edit Profile</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Roll</span>
           </button>
-          <div className="flex space-x-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl overflow-x-auto max-w-full">
-            {['overview', 'voters', 'candidates', 'complaints', 'settings'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold capitalize transition-all whitespace-nowrap ${
-                  activeTab === tab 
-                    ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-sm' 
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => handleExport('results')}
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center space-x-1"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Results</span>
+          </button>
+          <button
+            onClick={() => handleExport('sir')}
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors flex items-center space-x-1"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export SIR</span>
+          </button>
         </div>
-      </motion.div>
+      </div>
 
-      {error && (
-        <motion.div variants={itemVariants} className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-xl mb-8 text-sm border border-red-200 dark:border-red-800 shadow-sm">
-          {error}
-        </motion.div>
-      )}
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-700 space-x-3 text-xs font-bold overflow-x-auto pb-1">
+        {[
+          { id: 'overview', label: 'Overview & Briefing', icon: <Bot className="w-4 h-4" /> },
+          { id: 'elections', label: 'Elections Manager', icon: <Vote className="w-4 h-4" /> },
+          { id: 'candidates', label: 'Candidates & Manifestos', icon: <Users className="w-4 h-4" /> },
+          { id: 'voters', label: 'Voters & Senior Queue', icon: <HeartHandshake className="w-4 h-4" /> },
+          { id: 'sir_queue', label: 'SIR & BLO Approvals', icon: <FileText className="w-4 h-4" /> },
+          { id: 'complaints', label: 'AI Complaint Triage', icon: <AlertTriangle className="w-4 h-4" /> },
+          { id: 'announcements_audit', label: 'Notices & Audit Log', icon: <Bell className="w-4 h-4" /> }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`py-2 px-3 rounded-xl transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-orange-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
+      {/* TAB 1: OVERVIEW & AI BRIEFING */}
       {activeTab === 'overview' && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <motion.div whileHover={{ y: -5 }} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-6 rounded-3xl shadow-sm hover:shadow-md border border-orange-100 dark:border-orange-900/30 flex items-center space-x-5 transition-all duration-300">
-              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-2xl shadow-inner">
-                <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Total Voters</p>
-                <p className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats?.totalVoters.toLocaleString()}</p>
-              </div>
-            </motion.div>
-            
-            <motion.div whileHover={{ y: -5 }} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-6 rounded-3xl shadow-sm hover:shadow-md border border-green-100 dark:border-green-900/30 flex items-center space-x-5 transition-all duration-300">
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl shadow-inner">
-                <Vote className="w-8 h-8 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Votes Cast</p>
-                <p className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats?.totalVotes.toLocaleString()}</p>
-              </div>
-            </motion.div>
+        <div className="space-y-6">
+          {/* KPI Strip */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Total Registered</span>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono mt-1">
+                {stats?.totalVoters?.toLocaleString() || 0}
+              </p>
+            </div>
 
-            <motion.div whileHover={{ y: -5 }} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-6 rounded-3xl shadow-sm hover:shadow-md border border-blue-100 dark:border-blue-900/30 flex items-center space-x-5 transition-all duration-300">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl shadow-inner">
-                <Percent className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Turnout</p>
-                <p className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats?.turnoutPercentage}%</p>
-              </div>
-            </motion.div>
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Votes Tallied</span>
+              <p className="text-2xl font-extrabold text-emerald-600 font-mono mt-1">
+                {stats?.totalVotes?.toLocaleString() || 0}
+              </p>
+            </div>
 
-            <motion.div whileHover={{ y: -5 }} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-6 rounded-3xl shadow-sm hover:shadow-md border border-red-100 dark:border-red-900/30 flex items-center space-x-5 transition-all duration-300">
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl shadow-inner">
-                <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Complaints</p>
-                <p className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats?.pendingComplaints}</p>
-              </div>
-            </motion.div>
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Turnout</span>
+              <p className="text-2xl font-extrabold text-orange-600 font-mono mt-1">
+                {stats?.turnoutPercentage || 0}%
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Pending SIR</span>
+              <p className="text-2xl font-extrabold text-purple-600 font-mono mt-1">
+                {stats?.pendingSir || 0}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Open Complaints</span>
+              <p className="text-2xl font-extrabold text-red-600 font-mono mt-1">
+                {stats?.pendingComplaints || 0}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Senior (60+) / PwD</span>
+              <p className="text-2xl font-extrabold text-indigo-600 font-mono mt-1">
+                {stats?.seniorVoters || 0}
+              </p>
+            </div>
           </div>
 
-          {/* Results Table */}
-          <motion.div variants={itemVariants} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-200">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center transition-colors duration-200">
-              <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">Live Election Results</h2>
-              <span className="px-4 py-1.5 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-400 text-xs font-bold rounded-full flex items-center shadow-inner">
-                <span className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full mr-2 animate-pulse"></span>
-                Live Updates
-              </span>
+          {/* AI Briefing Banner */}
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 rounded-3xl border border-orange-200 dark:border-orange-800/40 p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-orange-600 text-white rounded-xl">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                    Executive Election Commission AI Briefing
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Real-time synthesis of voter turnout, pending SIR petitions, and operational hotspots.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={generateAiBriefing}
+                disabled={generatingBriefing}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-2 disabled:opacity-50"
+              >
+                {generatingBriefing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                <span>Generate Executive Briefing</span>
+              </button>
             </div>
+
+            {aiBriefing && (
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-orange-200 text-xs text-slate-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">
+                {aiBriefing}
+              </div>
+            )}
+          </div>
+
+          {/* Live Constituency Results with Publish Toggle */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                Live Constituency Results & Public Access
+              </h3>
+              {elections.length > 0 && (
+                <button
+                  onClick={() => handleTogglePublishResults(elections[0].id, elections[0].results_published)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                    elections[0].results_published
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-amber-600 text-white'
+                  }`}
+                >
+                  {elections[0].results_published ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                  <span>{elections[0].results_published ? 'Results Published (Live to Public)' : 'Results Embargoed (Click to Publish)'}</span>
+                </button>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 transition-colors duration-200">
-                    <th className="p-5 font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-xs">Candidate Name</th>
-                    <th className="p-5 font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-xs">Party</th>
-                    <th className="p-5 font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-xs text-right">Votes Received</th>
-                    <th className="p-5 font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider text-xs text-right">Vote Share</th>
+                  <tr className="bg-slate-50 dark:bg-slate-900 text-slate-400 font-bold uppercase border-b">
+                    <th className="p-3">Candidate</th>
+                    <th className="p-3">Party</th>
+                    <th className="p-3">Constituency</th>
+                    <th className="p-3">Votes Tallied</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {results.map((result, index) => {
-                    const share = stats?.totalVotes ? ((result.votes / stats.totalVotes) * 100).toFixed(1) : '0.0';
-                    return (
-                      <motion.tr 
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        key={result.id} 
-                        className={`border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${index === 0 ? 'bg-orange-50/30 dark:bg-orange-900/10' : ''}`}
-                      >
-                        <td className="p-5 flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center font-extrabold text-xl text-gray-500 dark:text-gray-400 shadow-sm border border-gray-200 dark:border-gray-600">
-                            {result.party_symbol[0]}
-                          </div>
-                          <span className="font-bold text-gray-900 dark:text-white text-lg">{result.name}</span>
-                          {index === 0 && result.votes > 0 && (
-                            <span className="ml-3 px-3 py-1 bg-gradient-to-r from-yellow-100 to-orange-100 dark:from-yellow-900/40 dark:to-orange-900/40 text-orange-800 dark:text-orange-400 text-xs font-bold rounded-lg shadow-sm">Leading</span>
-                          )}
-                        </td>
-                        <td className="p-5 text-gray-600 dark:text-gray-400 font-medium">{result.party_name}</td>
-                        <td className="p-5 text-right font-extrabold text-gray-900 dark:text-white text-lg">{result.votes.toLocaleString()}</td>
-                        <td className="p-5 text-right">
-                          <div className="flex items-center justify-end space-x-3">
-                            <span className="text-gray-700 dark:text-gray-300 font-bold w-14">{share}%</span>
-                            <div className="w-32 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${share}%` }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                className={`h-full rounded-full ${index === 0 ? 'bg-gradient-to-r from-orange-400 to-orange-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`}
-                              ></motion.div>
-                            </div>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {results.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">{r.name}</td>
+                      <td className="p-3 text-slate-500">{r.party_name}</td>
+                      <td className="p-3 text-slate-500">{r.constituency}</td>
+                      <td className="p-3 font-mono font-bold text-emerald-600">{r.votes?.toLocaleString() || 0}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
 
-      {activeTab === 'voters' && (
-        <motion.div variants={itemVariants} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-200">
-          <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center">
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">Voter Database</h2>
+      {/* TAB 2: ELECTIONS MANAGER */}
+      {activeTab === 'elections' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Electoral Cycles ({elections.length})
+            </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Name & Contact</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Address & City</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">EPIC Number</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Constituency</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Polling Station</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Status</th>
-                  <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {voters.map((v) => (
-                  <tr key={v.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="p-4">
-                      <div className="font-bold text-gray-900 dark:text-white">{v.name}</div>
-                      <div className="text-sm text-gray-500">{v.email}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-gray-900 dark:text-white text-sm">{v.address || 'N/A'}</div>
-                      <div className="text-xs font-bold text-gray-500">{v.city || 'N/A'}</div>
-                    </td>
-                    <td className="p-4 font-mono text-orange-600 dark:text-orange-400 font-bold">{v.epic_number}</td>
-                    <td className="p-4 text-gray-700 dark:text-gray-300">{v.constituency}</td>
-                    <td className="p-4 text-gray-700 dark:text-gray-300">{v.polling_station}</td>
-                    <td className="p-4">
-                      {v.has_voted ? (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-bold">Voted</span>
-                      ) : (
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-lg text-xs font-bold">Pending</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      <button 
-                        onClick={() => {
-                          setEditingVoter(v);
-                          setEditConstituency(v.constituency);
-                          setEditPollingStation(v.polling_station);
-                        }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      )}
 
-      {activeTab === 'complaints' && (
-        <motion.div variants={itemVariants} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-200">
-          <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">Complaints & Issues</h2>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {complaints.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No complaints found.</div>
-            ) : complaints.map((c) => (
-              <div key={c.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">{c.subject}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                    c.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                    c.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {c.status.toUpperCase()}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {elections.map((el) => (
+              <div
+                key={el.id}
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-orange-600 uppercase tracking-wider block">
+                      {el.election_type}
+                    </span>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{el.title}</h3>
+                  </div>
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">
+                    {el.status}
                   </span>
                 </div>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">{c.description}</p>
-                <div className="flex justify-between items-center text-sm text-gray-500">
-                  <span>From: {c.user_name} ({c.user_email})</span>
-                  <div className="space-x-2">
-                    {c.status === 'pending' && (
-                      <>
-                        <button onClick={() => handleUpdateComplaint(c.id, 'resolved')} className="px-3 py-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg font-bold transition-colors">Resolve</button>
-                        <button onClick={() => handleUpdateComplaint(c.id, 'rejected')} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-bold transition-colors">Reject</button>
-                      </>
-                    )}
-                  </div>
+
+                <p className="text-xs text-slate-500">{el.description}</p>
+
+                <div className="text-[11px] text-slate-400 font-mono space-y-0.5 pt-2 border-t border-slate-100">
+                  <p>Start: {new Date(el.start_time).toLocaleString()}</p>
+                  <p>End: {new Date(el.end_time).toLocaleString()}</p>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => handleTogglePublishResults(el.id, el.results_published)}
+                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg"
+                  >
+                    {el.results_published ? 'Unpublish Results' : 'Publish Results'}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
+      {/* TAB 3: CANDIDATES MANAGER */}
       {activeTab === 'candidates' && (
-        <motion.div variants={itemVariants} className="space-y-8">
-          <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6">Register New Candidate</h2>
-            {candidateStatus && (
-              <div className={`p-4 rounded-xl mb-6 text-sm font-bold ${candidateStatus.includes('successfully') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {candidateStatus}
-              </div>
-            )}
-            <form onSubmit={handleAddCandidate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Candidate Name</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newCandidate.name} 
-                  onChange={(e) => setNewCandidate({ ...newCandidate, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                  placeholder="Full Name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Party Name</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newCandidate.party_name} 
-                  onChange={(e) => setNewCandidate({ ...newCandidate, party_name: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                  placeholder="e.g. Indian National Congress"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Party Symbol (Emoji or Icon)</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newCandidate.party_symbol} 
-                  onChange={(e) => setNewCandidate({ ...newCandidate, party_symbol: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                  placeholder="e.g. ✋ or 🪷"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">State</label>
-                <select
-                  required
-                  value={newCandidate.state}
-                  onChange={(e) => setNewCandidate({ ...newCandidate, state: e.target.value, city: '', constituency: '' })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                >
-                  <option value="">Select State</option>
-                  {states.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">City</label>
-                <select
-                  required
-                  disabled={!newCandidate.state}
-                  value={newCandidate.city}
-                  onChange={(e) => {
-                    const city = e.target.value;
-                    setNewCandidate({ 
-                      ...newCandidate, 
-                      city, 
-                      constituency: '' 
-                    });
-                  }}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50"
-                >
-                  <option value="">Select City</option>
-                  {cities.map(city => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Constituency</label>
-                <select
-                  required
-                  disabled={!newCandidate.city}
-                  value={newCandidate.constituency}
-                  onChange={(e) => setNewCandidate({ ...newCandidate, constituency: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50"
-                >
-                  <option value="">Select Constituency</option>
-                  {constituenciesList.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <button type="submit" className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg">
-                  Register Candidate
-                </button>
-              </div>
-            </form>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Contesting Candidates ({candidates.length})
+            </h2>
+            <button
+              onClick={() => {
+                resetCandidateForm();
+                setShowCandidateModal(true);
+              }}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Contesting Candidate</span>
+            </button>
           </div>
 
-          <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-200">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 flex justify-between items-center">
-              <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">Existing Candidates</h2>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {candidates.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">{c.name}</h3>
+                    <p className="text-xs text-orange-600 font-semibold">{c.party_name}</p>
+                    <p className="text-[11px] text-slate-400">{c.constituency}</p>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
+                    {c.party_symbol}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 pt-2 border-t">
+                  <p>Education: <strong>{c.education || 'Declared'}</strong></p>
+                  <p>Assets: <strong>{c.assets_declared || 'Disclosed'}</strong></p>
+                  <p>Criminal Cases: <strong>{c.criminal_cases || 0}</strong></p>
+                </div>
+
+                <div className="pt-2 flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setEditingCandidate(c);
+                      setCandName(c.name);
+                      setCandParty(c.party_name);
+                      setCandSymbol(c.party_symbol);
+                      setCandConstituency(c.constituency);
+                      setCandAge(c.age ? String(c.age) : '');
+                      setCandEducation(c.education || '');
+                      setCandAssets(c.assets_declared || '');
+                      setCandCases(String(c.criminal_cases || 0));
+                      setCandBio(c.bio || '');
+                      setCandManifesto(Array.isArray(c.manifesto_json) ? c.manifesto_json.join('\n') : '');
+                      setShowCandidateModal(true);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCandidate(c.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: VOTERS & SENIOR QUEUE */}
+      {activeTab === 'voters' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Voter Directory & Senior Assistance Queue ({voters.length})
+            </h2>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-                    <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Candidate Name</th>
-                    <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Party</th>
-                    <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Symbol</th>
-                    <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase">Constituency</th>
-                    <th className="p-4 font-bold text-gray-600 dark:text-gray-400 text-xs uppercase text-right">Actions</th>
+                  <tr className="bg-slate-50 dark:bg-slate-900 text-slate-400 font-bold uppercase border-b">
+                    <th className="p-3">EPIC</th>
+                    <th className="p-3">Name & Contact</th>
+                    <th className="p-3">Constituency & Part</th>
+                    <th className="p-3">Senior / PwD Flag</th>
+                    <th className="p-3">Voted Status</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {candidates.map((c) => (
-                    <tr key={c.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="p-4 font-bold text-gray-900 dark:text-white">{c.name}</td>
-                      <td className="p-4 text-gray-700 dark:text-gray-300">{c.party_name}</td>
-                      <td className="p-4 text-2xl">{c.party_symbol}</td>
-                      <td className="p-4 text-gray-700 dark:text-gray-300">{c.constituency}</td>
-                      <td className="p-4 text-right">
-                        <button 
-                          onClick={() => handleDeleteCandidate(c.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <XCircle className="w-5 h-5" />
-                        </button>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {voters.map((v) => (
+                    <tr key={v.id} className="hover:bg-slate-50/50">
+                      <td className="p-3 font-mono font-bold text-orange-600">{v.epic_number}</td>
+                      <td className="p-3">
+                        <p className="font-bold text-slate-900 dark:text-white">{v.name}</p>
+                        <p className="text-slate-400 text-[11px]">{v.email} · {v.mobile}</p>
+                      </td>
+                      <td className="p-3">
+                        <p className="font-semibold">{v.constituency}</p>
+                        <p className="text-slate-400 text-[11px]">{v.part_number} · #{v.serial_number}</p>
+                      </td>
+                      <td className="p-3">
+                        {v.is_senior_citizen ? (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-[10px] font-bold">
+                            Senior (60+)
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Standard</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          v.has_voted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {v.has_voted ? 'Tallied' : 'Pending'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -731,139 +676,346 @@ export default function AdminDashboard() {
               </table>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* Settings Tab */}
-      {activeTab === 'settings' && (
-        <motion.div variants={itemVariants} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
-          <div className="flex items-center mb-6">
-            <Settings className="w-6 h-6 mr-3 text-orange-500" />
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">Election Timeline Settings</h2>
+      {/* TAB 5: SIR REVISION QUEUE & BLO APPROVALS */}
+      {activeTab === 'sir_queue' && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+            Special Intensive Revision (SIR) Approval Queue ({sirRequests.length})
+          </h2>
+
+          <div className="space-y-3">
+            {sirRequests.map((req) => (
+              <div
+                key={req.id}
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 font-bold text-[10px] rounded">
+                      {req.form_type}
+                    </span>
+                    <span className="font-mono font-bold text-xs">{req.tracking_id}</span>
+                    <span className="text-slate-400 text-[11px]">· {req.voter_name}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Subtype: <strong>{req.request_subtype}</strong>
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Assigned BLO: {req.blo_name || 'Designated BLO'}
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                    req.status === 'APPROVED'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : req.status === 'REJECTED'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {req.status}
+                  </span>
+
+                  {req.status !== 'APPROVED' && (
+                    <button
+                      onClick={() => handleReviewSir(req.id, 'APPROVED')}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      Approve & Mutate Roll
+                    </button>
+                  )}
+                  {req.status !== 'REJECTED' && (
+                    <button
+                      onClick={() => handleReviewSir(req.id, 'REJECTED')}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-          
-          {timelineStatus && (
-            <div className={`p-4 rounded-xl mb-6 text-sm font-bold ${timelineStatus.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {timelineStatus}
-            </div>
-          )}
-
-          <form onSubmit={handleUpdateTimeline} className="space-y-6 max-w-md">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Voting Start Time</label>
-              <input 
-                type="datetime-local" 
-                required
-                value={timelineStart} 
-                onChange={(e) => setTimelineStart(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Voting End Time</label>
-              <input 
-                type="datetime-local" 
-                required
-                value={timelineEnd} 
-                onChange={(e) => setTimelineEnd(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-              />
-            </div>
-            <button type="submit" className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-colors">
-              Update Timeline
-            </button>
-          </form>
-        </motion.div>
+        </div>
       )}
 
-      {/* Edit Voter Modal */}
-      <AnimatePresence>
-        {editingVoter && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md w-full shadow-2xl"
-            >
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Edit Voter Data</h3>
-              <form onSubmit={handleUpdateVoter} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Constituency</label>
-                  <input 
-                    type="text" 
-                    value={editConstituency} 
-                    onChange={(e) => setEditConstituency(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Polling Station</label>
-                  <input 
-                    type="text" 
-                    value={editPollingStation} 
-                    onChange={(e) => setEditPollingStation(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
-                  />
-                </div>
-                <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={() => setEditingVoter(null)} className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl font-bold">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600">Save Changes</button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* TAB 6: AI COMPLAINT TRIAGE */}
+      {activeTab === 'complaints' && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+            Grievances with Automated AI Priority Triage ({complaints.length})
+          </h2>
 
-      {/* Edit Profile Modal */}
-      <AnimatePresence>
-        {showEditProfile && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md w-full shadow-2xl"
-            >
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Edit Admin Profile</h3>
-              {profileStatus && (
-                <div className={`p-3 rounded-lg mb-4 text-sm font-bold ${profileStatus.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {profileStatus}
+          <div className="space-y-3">
+            {complaints.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded uppercase">
+                        {c.category || 'GENERAL'}
+                      </span>
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${
+                        c.priority === 'HIGH' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {c.priority || 'MEDIUM'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">{c.subject}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">From: {c.user_name} ({c.user_email})</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    c.status === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {c.status}
+                  </span>
                 </div>
-              )}
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
+
+                <p className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl">
+                  {c.description}
+                </p>
+
+                {/* AI Triage Suggestion */}
+                {c.ai_suggested_reply && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-xl border border-orange-200 text-xs text-orange-900 space-y-2">
+                    <p className="font-bold flex items-center space-x-1 text-orange-700">
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>AI Suggested Administrative Reply:</span>
+                    </p>
+                    <p className="italic">{c.ai_suggested_reply}</p>
+                    <button
+                      onClick={() => {
+                        setReplyingComplaintId(c.id);
+                        setReplyText(c.ai_suggested_reply);
+                      }}
+                      className="px-3 py-1 bg-orange-600 text-white rounded-lg font-bold text-[11px]"
+                    >
+                      Use AI Draft Reply
+                    </button>
+                  </div>
+                )}
+
+                {replyingComplaintId === c.id && (
+                  <div className="space-y-2 pt-2">
+                    <textarea
+                      rows={2}
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs"
+                    />
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => setReplyingComplaintId(null)}
+                        className="px-3 py-1 bg-slate-100 rounded-lg text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleReplyComplaint(c.id)}
+                        className="px-4 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                      >
+                        Send & Resolve
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: ANNOUNCEMENTS & AUDIT LOGS */}
+      {activeTab === 'announcements_audit' && (
+        <div className="space-y-6">
+          {/* Post Notice */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">Post Official Public Notice</h3>
+            <form onSubmit={handleAddAnnouncement} className="space-y-3 text-xs">
+              <input
+                type="text"
+                value={annTitle}
+                onChange={(e) => setAnnTitle(e.target.value)}
+                placeholder="Notice headline..."
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border rounded-xl"
+                required
+              />
+              <textarea
+                rows={2}
+                value={annContent}
+                onChange={(e) => setAnnContent(e.target.value)}
+                placeholder="Full notice content..."
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border rounded-xl"
+                required
+              />
+              <div className="flex justify-end">
+                <button type="submit" className="px-5 py-2 bg-orange-600 text-white font-bold rounded-xl">
+                  Publish Notice
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Audit Logs */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Immutable Security Audit Log (Last 150 events)
+            </h3>
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {auditLogs.map((log) => (
+                <div key={log.id} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl text-xs font-mono space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-orange-600">{log.action}</span>
+                    <span className="text-slate-400 text-[10px]">{new Date(log.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Actor: {log.actor_role} · Target: {log.target_type} ({log.target_id || 'N/A'})
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Candidate Modal */}
+      {showCandidateModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              {editingCandidate ? 'Edit Candidate Affidavit' : 'Add Contesting Candidate'}
+            </h3>
+            <form onSubmit={handleSaveCandidate} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1">Name</label>
+                <input
+                  type="text"
+                  value={candName}
+                  onChange={(e) => setCandName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Name</label>
-                  <input 
-                    type="text" 
+                  <label className="block font-bold mb-1">Party Name</label>
+                  <input
+                    type="text"
+                    value={candParty}
+                    onChange={(e) => setCandParty(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
                     required
-                    value={editName} 
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Mobile Number</label>
-                  <input 
-                    type="tel" 
+                  <label className="block font-bold mb-1">Symbol</label>
+                  <input
+                    type="text"
+                    value={candSymbol}
+                    onChange={(e) => setCandSymbol(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
                     required
-                    value={editMobile} 
-                    onChange={(e) => setEditMobile(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
                   />
                 </div>
-                <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={() => setShowEditProfile(false)} className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl font-bold">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600">Save Changes</button>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1">Constituency</label>
+                <input
+                  type="text"
+                  value={candConstituency}
+                  onChange={(e) => setCandConstituency(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block font-bold mb-1">Age</label>
+                  <input
+                    type="number"
+                    value={candAge}
+                    onChange={(e) => setCandAge(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  />
                 </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+                <div className="col-span-2">
+                  <label className="block font-bold mb-1">Education</label>
+                  <input
+                    type="text"
+                    value={candEducation}
+                    onChange={(e) => setCandEducation(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1">Assets Declared</label>
+                  <input
+                    type="text"
+                    value={candAssets}
+                    onChange={(e) => setCandAssets(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Criminal Cases</label>
+                  <input
+                    type="number"
+                    value={candCases}
+                    onChange={(e) => setCandCases(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1">Biography</label>
+                <textarea
+                  rows={2}
+                  value={candBio}
+                  onChange={(e) => setCandBio(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1">Manifesto Pledges (One per line)</label>
+                <textarea
+                  rows={3}
+                  value={candManifesto}
+                  onChange={(e) => setCandManifesto(e.target.value)}
+                  placeholder="Universal health clinics&#10;Solar energy subsidies&#10;Clean water access"
+                  className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCandidateModal(false)}
+                  className="px-4 py-2 bg-slate-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="px-5 py-2 bg-orange-600 text-white font-bold rounded-xl">
+                  Save Candidate
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

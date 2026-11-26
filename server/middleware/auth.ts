@@ -9,8 +9,15 @@ export const authenticateToken = (req: any, res: any, next: any) => {
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
     req.user = user;
     next();
   });
+};
+
+export const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Administrative privileges required' });
+  }
+  next();
 };

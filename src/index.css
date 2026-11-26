@@ -1,10 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Public+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans", "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   
   --color-orange-50: #fff7ed;
   --color-orange-100: #ffedd5;
@@ -42,7 +44,8 @@
 
 @layer base {
   body {
-    @apply bg-orange-50/30 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200;
+    @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   ::selection {
@@ -51,15 +54,16 @@
 
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
-    width: 10px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+    @apply bg-slate-100 dark:bg-slate-800;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-solid border-gray-100 dark:border-gray-800;
+    @apply bg-slate-300 dark:bg-slate-600 rounded-full border-2 border-solid border-slate-100 dark:border-slate-800;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -67,3 +71,55 @@
   }
 }
 
+/* Accessibility & Senior Citizen Scaled Tokens */
+html.font-scale-lg {
+  font-size: 115%;
+}
+
+html.font-scale-xl {
+  font-size: 130%;
+}
+
+html.senior-mode button,
+html.senior-mode a,
+html.senior-mode input,
+html.senior-mode select {
+  min-height: 48px;
+  font-size: 1.05rem;
+}
+
+html.senior-mode .senior-tap-target {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  font-size: 1.15rem;
+}
+
+html.high-contrast {
+  filter: contrast(120%);
+}
+
+html.high-contrast button,
+html.high-contrast input,
+html.high-contrast select,
+html.high-contrast a {
+  border-width: 2px !important;
+}
+
+:focus-visible {
+  outline: 3px solid #ea580c !important;
+  outline-offset: 3px !important;
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* RTL layout adjustments */
+[dir="rtl"] {
+  text-align: right;
+}

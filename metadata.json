@@ -1,5 +1,6 @@
 {
   "name": "E-Voting Portal",
   "description": "A secure, end-to-end electronic voting system with face authentication, voter registration, and real-time election results.",
-  "requestFramePermissions": ["camera"]
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

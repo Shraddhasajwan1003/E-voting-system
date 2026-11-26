@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.js",
-    "build": "vite build && npx esbuild server.ts --bundle --platform=node --target=node18 --outfile=server.js --format=esm --external:express --external:mysql2 --external:jsonwebtoken",
+    "build": "vite build && npx esbuild server.ts --bundle --platform=node --target=node18 --outfile=server.js --format=esm --packages=external",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

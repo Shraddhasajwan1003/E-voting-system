@@ -175,12 +175,12 @@ export default function Login() {
                 <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500" />
               </div>
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10 w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all text-gray-900 dark:text-white shadow-sm"
-                placeholder={loginMethod === 'admin' ? "admin@eci.gov.in" : "voter@india.gov.in"}
+                placeholder={loginMethod === 'admin' ? "admin@eci.gov.in" : "Email or EPIC Number (e.g. IND1234567)"}
               />
             </div>
           </div>
